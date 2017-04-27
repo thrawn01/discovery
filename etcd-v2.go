@@ -1,10 +1,11 @@
 package discovery
 
 import (
-	etcdv2 "github.com/coreos/etcd/client"
-	"github.com/pkg/errors"
 	"context"
 	"time"
+
+	etcdv2 "github.com/coreos/etcd/client"
+	"github.com/pkg/errors"
 )
 
 type CancelFunc func()
@@ -16,20 +17,20 @@ type EtcdConfig interface {
 }
 
 type EtcdV2Config struct {
-	api etcdv2.KeysAPI
+	api     etcdv2.KeysAPI
 	timeout time.Duration
 }
 
 func NewEtcdV2Config(conf *etcdv2.Config) (EtcdConfig, error) {
 	// Get our etcd endpoints
-	endpoints, err := Services("etcd", "client", "tcp", "http://{{.Target}}:{{.Port}}")
+	endpoints, err := FormatServices("etcd", "client", "tcp", "http://{{.Target}}:{{.Port}}")
 	if err != nil {
 		return nil, err
 	}
 
 	if conf == nil {
 		conf = &etcdv2.Config{
-			Endpoints: endpoints,
+			Endpoints:               endpoints,
 			HeaderTimeoutPerRequest: time.Second * 5,
 		}
 	} else {
@@ -42,7 +43,7 @@ func NewEtcdV2Config(conf *etcdv2.Config) (EtcdConfig, error) {
 	}
 
 	return &EtcdV2Config{
-		api: etcdv2.NewKeysAPI(client),
+		api:     etcdv2.NewKeysAPI(client),
 		timeout: conf.HeaderTimeoutPerRequest,
 	}, nil
 }

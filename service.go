@@ -9,12 +9,11 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/mailgun/scroll/vulcand"
 	"github.com/miekg/dns"
 	"github.com/pkg/errors"
 )
 
-type ServiceData struct {
+type ServiceInfo struct {
 	Service  string
 	Net      string
 	Target   string
@@ -32,7 +31,7 @@ func Fqdn(service, namespace string) string {
 //
 // The golang implementation in turn by passes the /etc/resolver system
 // on OSX which kubegun/minikube uses for dns resolution.
-func directLookupSRV(service, portName, network string) ([]ServiceData, error) {
+func directLookupSRV(service, portName, network string) ([]ServiceInfo, error) {
 	// TODO: Detect if we are on K8 or Mesos
 
 	// Find the dns service
@@ -59,12 +58,12 @@ func directLookupSRV(service, portName, network string) ([]ServiceData, error) {
 		return nil, fmt.Errorf("Invalid answer name after SRV query for %s\n", service)
 	}
 
-	var results []ServiceData
+	var results []ServiceInfo
 	// Stuff must be in the answer section
 	for _, a := range r.Answer {
 		srv := a.(*dns.SRV)
-		results = append(results, ServiceData{
-			Target:   srv.Target,
+		results = append(results, ServiceInfo{
+			Target:   strings.TrimRight(srv.Target, "."),
 			PortName: portName,
 			Net:      network,
 			Service:  service,
@@ -74,79 +73,92 @@ func directLookupSRV(service, portName, network string) ([]ServiceData, error) {
 	return results, nil
 }
 
-func builtinLookupSRV(service, portName, network string) ([]ServiceData, error) {
+// Uses the builtin golang net.LookupSRV on systems that have their
+// /etc/resolv.conf configured correctly
+func builtinLookupSRV(service, portName, network string) ([]ServiceInfo, error) {
 	// TODO: FQDN the host here?
 	_, records, err := net.LookupSRV(portName, network, service)
 	if err != nil {
 		return nil, err
 	}
-	var results []ServiceData
-	for _, srv := range records {
-		results = append(results, ServiceData{
-			Target:   srv.Target,
+	var results []ServiceInfo
+	for _, record := range records {
+		results = append(results, ServiceInfo{
+			Target:   strings.TrimRight(record.Target, "."),
 			PortName: portName,
 			Net:      network,
 			Service:  service,
-			Port:     int(srv.Port),
+			Port:     int(record.Port),
 		})
 	}
 	return results, nil
 }
 
-// Return a list of discovered endpoints for the service requested, in the format specified
-// Available format variables are `.Target`, `.Port`, `.PortName`, `.Net`, `.Service`
+// Return a list of discovered endpoints for the service requested,
 //
 //	// "etcd" is the name of the service registered and "client" is the name of the port
 // 	// when the services is registered with K8 or Mesos
-//	endpoints, err := discovery.Services("etcd", "client", "tcp", "http://{{.Target}}:{{.Port}}")
+//	endpoints, err := discovery.Services("etcd", "client", "tcp")
 //	if err != nil {
 //		panic(err)
 //	}
+//	fmt.Printf("Target: %s\n", endpoints[0].Target)
 //
-func Services(service, portName, net, format string) ([]string, error) {
-	var err error
+func Services(service, portName, net string) ([]ServiceInfo, error) {
+	// TODO: Cache the results
 
-	tmpl, err := template.New("service").Parse(format)
-	if err != nil {
-		return nil, errors.Wrap(err, "while creating template for service lookup")
-	}
-
-	var records []ServiceData
 	if runtime.GOOS == "darwin" {
-		records, err = directLookupSRV(service, portName, net)
+		return directLookupSRV(service, portName, net)
 	} else {
-		records, err = builtinLookupSRV(service, portName, net)
+		return builtinLookupSRV(service, portName, net)
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	var result []string
-	for _, record := range records {
-		record.Target = strings.TrimRight(record.Target, ".")
-		record.PortName = portName
-		record.Net = net
-		record.Service = service
-
-		var buf bytes.Buffer
-		if err = tmpl.Execute(&buf, record); err != nil {
-			return nil, errors.Wrap(err, "while executing template")
-		}
-		result = append(result, buf.String())
-	}
-	return result, nil
 }
 
-// Return a single address for the service requested, in the format specified
-func Service(host, portName, net, format string) (string, error) {
-	results, err := Services(host, portName, net, format)
+// Return a list of services in the format specified
+func FormatServices(service, portName, net, format string) ([]string, error) {
+	var results []string
+
+	services, err := Services(service, portName, net)
+	if err != nil {
+		return results, err
+	}
+	return Format(services, format)
+}
+
+// Return a single service in the format specified
+func FormatService(service, portName, net, format string) (string, error) {
+	results, err := FormatServices(service, portName, net, format)
 	if err != nil {
 		return "", err
 	}
 	return results[0], nil
 }
 
-// Return a vulcand config object suitable for use by scroll
-func VulcandConfig() vulcand.Config {
-	return vulcand.Config{}
+// Return a single address for the service requested, in the format specified
+func Service(host, portName, net string) (ServiceInfo, error) {
+	results, err := Services(host, portName, net)
+	if err != nil {
+		return ServiceInfo{}, err
+	}
+	return results[0], nil
+}
+
+// Format ServiceInfo in the specified format; available variables
+// are `.Target`, `.Port`, `.PortName`, `.Net`, `.Service`
+func Format(services []ServiceInfo, format string) ([]string, error) {
+	var results []string
+
+	tmpl, err := template.New("service").Parse(format)
+	if err != nil {
+		return nil, errors.Wrap(err, "while creating template for service lookup")
+	}
+
+	for _, service := range services {
+		var buf bytes.Buffer
+		if err = tmpl.Execute(&buf, service); err != nil {
+			return nil, errors.Wrap(err, "while executing template")
+		}
+		results = append(results, buf.String())
+	}
+	return results, nil
 }

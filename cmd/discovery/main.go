@@ -24,15 +24,16 @@ func main() {
 
 	opts := parser.ParseOrExit(nil)
 
-	results, err := discovery.Services(
+	endpoints, err := discovery.FormatServices(
 		opts.String("service"),
 		opts.String("port"),
 		opts.String("net"),
-		"Target: {{.Target}} Port: {{.Port}}")
+		"Target: {{.Target}} Port: {{.Port}}",
+	)
 	checkErr(err)
 
 	fmt.Println("# Results")
-	for _, row := range results {
+	for _, row := range endpoints {
 		fmt.Println(row)
 	}
 	os.Exit(0)
