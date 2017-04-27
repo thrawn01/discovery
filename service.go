@@ -41,21 +41,21 @@ func directLookupSRV(service, portName, network string) ([]ServiceInfo, error) {
 	}
 
 	// Construct a full SRV domain request
-	service = fmt.Sprintf("_%s._%s.%s", portName, network, Fqdn(service, "default"))
+	fqdn := fmt.Sprintf("_%s._%s.%s", portName, network, Fqdn(service, "default"))
 
 	// Query DNS Directly for SRV records
 	c := new(dns.Client)
 	c.Timeout = time.Second * 3
 
 	m := new(dns.Msg)
-	m.SetQuestion(dns.Fqdn(service), dns.TypeSRV)
+	m.SetQuestion(dns.Fqdn(fqdn), dns.TypeSRV)
 	r, _, err := c.Exchange(m, net.JoinHostPort(addrs[0], "53"))
 	if err != nil {
 		return nil, err
 	}
 
 	if r.Rcode != dns.RcodeSuccess {
-		return nil, fmt.Errorf("Invalid answer name after SRV query for %s\n", service)
+		return nil, fmt.Errorf("Unknown service '%s'; SRV query for %s failed\n", service, fqdn)
 	}
 
 	var results []ServiceInfo
