@@ -17,7 +17,7 @@ func checkErr(err error) {
 
 func main() {
 	parser := args.NewParser()
-	parser.AddArgument("service").Help("The name of the service to lookup")
+	parser.AddArgument("service").Required().Help("The name of the service to lookup")
 	parser.AddArgument("port").Default("client").Help("The name of the port to lookup")
 	parser.AddArgument("net").Choices([]string{"tcp", "udp"}).Default("tcp").
 		Help("The name of the network to lookup")
