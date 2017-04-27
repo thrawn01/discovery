@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/thrawn01/args"
-	"github.com/mailgun/discovery"
 	"fmt"
 	"os"
+
+	"github.com/mailgun/discovery"
+	"github.com/thrawn01/args"
 )
 
 func checkErr(err error) {
@@ -16,11 +17,18 @@ func checkErr(err error) {
 
 func main() {
 	parser := args.NewParser()
-	parser.AddArgument("service-name").Help("The name of the service to lookup")
+	parser.AddArgument("service").Help("The name of the service to lookup")
+	parser.AddArgument("port").Default("client").Help("The name of the port to lookup")
+	parser.AddArgument("net").Choices([]string{"tcp", "udp"}).Default("tcp").
+		Help("The name of the network to lookup")
 
 	opts := parser.ParseOrExit(nil)
 
-	results, err := discovery.Services(opts.String("service-name"), "Target: {{.Target}} Port: {{.Port}}")
+	results, err := discovery.Services(
+		opts.String("service"),
+		opts.String("port"),
+		opts.String("net"),
+		"Target: {{.Target}} Port: {{.Port}}")
 	checkErr(err)
 
 	fmt.Println("# Results")

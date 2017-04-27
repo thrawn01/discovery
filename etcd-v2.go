@@ -22,7 +22,7 @@ type EtcdV2Config struct {
 
 func NewEtcdV2Config(conf *etcdv2.Config) (EtcdConfig, error) {
 	// Get our etcd endpoints
-	endpoints, err := Services("etcd", "{{.Host}}:{{.Port}}")
+	endpoints, err := Services("etcd", "client", "tcp", "http://{{.Target}}:{{.Port}}")
 	if err != nil {
 		return nil, err
 	}
